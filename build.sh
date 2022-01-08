@@ -1,1 +1,1 @@
-g++ main.c -o main -std=c99 -lncurses
+g++ main.c -o main -std=c99 -lncurses -Wall
