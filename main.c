@@ -4,21 +4,26 @@
 #include <stdbool.h>
 #include <ncurses.h>
 #include <locale.h>
+#include <unistd.h>
 
-#define BUFFER_LENGTH_PATH 64
-#define BUFFER_LENGTH_NAME 32
+
+#define MAX_DEPTH 6
+#define BUFFER_LENGTH_PATH 144
+#define BUFFER_LENGTH_NAME 24
 
 typedef struct Node
-{
+{    
+    char console_output_line[BUFFER_LENGTH_PATH];
     char path[BUFFER_LENGTH_PATH];
     char name[BUFFER_LENGTH_NAME];
     Node* parent;
     Node* children[64];    
     int child_count;
-    bool endpoint;
-    bool collapsed;
     int child_index;
     int chars_in_name;
+    bool is_endpoint;
+    bool is_collapsed;
+    bool generated_console_output_line;
 }
 Node;
 
@@ -34,7 +39,7 @@ void genereate_line(char *str,int position, Node *node)
         return;
     }
     //+3 for child count indicator example: [3]
-    int length = (node->parent->chars_in_name)-1 + 3;
+    size_t length = (node->parent->chars_in_name)-1 + 3;
     for (size_t i = 0; i < length; i++)
     {
         str[position--] = ' ';
@@ -54,68 +59,64 @@ void calc_length(Node *node,int *length)
     *length += (node->parent->chars_in_name) + 3;
     calc_length(node->parent,length);
 }
-void clear_tree(WINDOW *win, int lines)
+void clear_tree(WINDOW *win,char * clear_line, int lines)
 {
-    char lol[64];
-    memset(lol,' ',63);
-    for (size_t i = 1; i < lines; i++)
+    for (size_t i = 1; i < (size_t)lines; i++)
     {        
-        mvwprintw(win,i,1,lol);
+        mvwprintw(win,i,1,clear_line);
     }
     
 }
 void print_tree(WINDOW *win,Node *node, int depth,int *line_nr, Node *selected_node)
-{
-    char output[80];
-    memset(output,' ',80);
+{    
+    char *output = node->console_output_line;
 
-    int length = 0;   
-    calc_length(node,&length);   
-    output[79] = '\0';  
-    genereate_line(output,length-1,node);
-
-    int P = length;
-    int namen_length = strlen(node->name);
-
-    if(node->parent == NULL)
+    if(!node->generated_console_output_line)
     {
-        memcpy(output+P,"└─",6);
-        P += 6;
-    }
-    else
-    {
-        if(node->child_index == node->parent->child_count-1)
-        {         
+        int length = 0;   
+        calc_length(node,&length); 
+
+        genereate_line(output,length-1,node);
+
+        int P = length;
+        int namen_length = strlen(node->name);
+
+        if(node->parent == NULL)
+        {
             memcpy(output+P,"└─",6);
-            P += 6;   
+            P += 6;
         }
         else
-        {     
-            memcpy(output+P,"├─",6);
-            P += 6;     
+        {
+            if(node->child_index == node->parent->child_count-1)
+            {         
+                memcpy(output+P,"└─",6);
+                P += 6;   
+            }
+            else
+            {     
+                memcpy(output+P,"├─",6);
+                P += 6;     
+            }
         }
+
+        memcpy(output+P,node->name,namen_length);
+        P += namen_length;
+
+        memcpy(output+P,"[",1);
+        P+=1;
+
+        char str[2];
+        sprintf(str, "%d", node->child_count);
+        memcpy(output+P,str,1); 
+        P += 1;
+
+        memcpy(output+P,"]",1);   
+        P+=1;
+
+        node->generated_console_output_line = true;
+
     }
-
-
-
-    memcpy(output+P,node->name,namen_length);
-    P += namen_length;
-
-
-
-    
-
-
-    memcpy(output+P,"[",1);
-    P+=1;
-
-    char str[2];
-    sprintf(str, "%d", node->child_count);
-    memcpy(output+P,str,1); 
-    P += 1;
-
-    memcpy(output+P,"]",1);   
-    P+=1;
 
     if(node == selected_node)
     {
@@ -131,9 +132,9 @@ void print_tree(WINDOW *win,Node *node, int depth,int *line_nr, Node *selected_n
         
      *line_nr +=1;
 
-    if(!node->collapsed)
+    if(!node->is_collapsed)
     {
-        for (size_t i = 0; i < node->child_count; i++)
+        for (int i = 0; i < node->child_count; i++)
         {
             print_tree(win,node->children[i],depth+1,line_nr,selected_node);
         }
@@ -155,33 +156,30 @@ void count_utf8_chars(char *str,int *count)
 
 int main () 
 {
-
-    setlocale(LC_ALL, "sv_SE.UTF-8");
-
-    FILE *data = fopen("src.txt", "r");
- 
-    char * line = NULL;
-    size_t len = 0;
-    ssize_t read;
-
+    setlocale(LC_ALL, "sv_SE.UTF-8");  
     initscr();
-
-start_color();
-
+    start_color();    
     init_pair(1,COLOR_GREEN,COLOR_BLACK);
-        WINDOW *win = newwin(60,80,0,0);
-    noecho();
-    curs_set(0);
-keypad(win, TRUE);
+
     int max_y,max_x;
     getmaxyx(stdscr,max_y,max_x);
 
+    WINDOW *win = newwin(max_y,(max_x <= BUFFER_LENGTH_PATH+1) ? max_x:BUFFER_LENGTH_PATH+1,0,0);
+    noecho();
+    curs_set(0);
+    keypad(win, TRUE);
     box(win,0,0);
 
+    char *clear_line = (char*)malloc(sizeof(char)*BUFFER_LENGTH_PATH);
+    memset(clear_line,' ',BUFFER_LENGTH_PATH-1);
 
+    FILE *data = fopen("src.txt", "r");
 
     if (data != NULL)
     {
+        char * line = NULL;
+        size_t len = 0;
+        ssize_t read;
         int max_nodes = 0;  
         char c; 
          for (c = getc(data); c != EOF; c = getc(data))
@@ -198,11 +196,9 @@ keypad(win, TRUE);
         strcpy(nodes[0].name,"root");
         strcpy(nodes[0].path,"root");
         count_utf8_chars(nodes[0].name,&(nodes[0].chars_in_name));
-        nodes[0].collapsed = false;
+        nodes[0].is_collapsed = false;
+        nodes[0].generated_console_output_line = false;
         int node_count = 1;
-
-        Node endpoints[max_nodes];
-        int endpoint_count = 0;
 
         int path_end = 0;
 
@@ -214,9 +210,7 @@ keypad(win, TRUE);
             {
                 Node *node = &nodes[node_count];
                 if(line[i] == '/')
-                {
-                    
-
+                {         
                     //Previous Node Path
                     int length_path = end + 1 >= BUFFER_LENGTH_PATH ? BUFFER_LENGTH_PATH-1 : end + 1;
                     char prev[length_path];     
@@ -240,11 +234,12 @@ keypad(win, TRUE);
                     length_path = end + 1 >= BUFFER_LENGTH_PATH ? BUFFER_LENGTH_PATH-1 : end + 1;
                     memcpy(node->path,&line[0],length_path);
                     node->path[length_path-1] = '\0';
-                    node->collapsed = true;
+                    node->is_collapsed = true;
+                    node->generated_console_output_line = false;
 
                     //Look if Node allready exists
                     bool exists = false;
-                    for (size_t j = 0; j < node_count; j++)
+                    for (int j = 0; j < node_count; j++)
                     {
                         if(strcmp(nodes[j].path,node->path) == 0)
                         {
@@ -284,13 +279,14 @@ keypad(win, TRUE);
 
             Node *endpoint = &nodes[node_count];
 
-
             //Node name (Endpoint)
             int length_name = path_end-start+1 >= BUFFER_LENGTH_NAME ? BUFFER_LENGTH_NAME-1 : path_end-start+1;
             memcpy(endpoint->name,&line[start],length_name);
             endpoint->name[length_name-1] = '\0';
             count_utf8_chars(endpoint->name,&endpoint->chars_in_name);
-            endpoint->endpoint = true;  
+            endpoint->is_endpoint = true;  
+            endpoint->is_collapsed = true;
+            endpoint->generated_console_output_line = false;
 
             //Node path (Endpoint)
             int length_path = end+1 >= BUFFER_LENGTH_PATH ? BUFFER_LENGTH_PATH-1 : end+1;
@@ -304,7 +300,7 @@ keypad(win, TRUE);
                 Node *node = &nodes[index];
                 if(strcmp(node->path,path) == 0)
                 {
-                    if(!node->endpoint)
+                    if(!node->is_endpoint)
                     {
                         node->children[node->child_count] = endpoint;
                         endpoint->child_index = node->child_count;
@@ -318,14 +314,13 @@ keypad(win, TRUE);
         }
 
         int line_nr = 1;
-
         Node *snode = &nodes[0];
-
         print_tree(win,&nodes[0],1,&line_nr,snode);
-
         wrefresh(win);
-        char ch;
-        while(1)
+
+        bool quit = false;
+
+        while(!quit)
         {
             int key = wgetch(win);
 
@@ -349,34 +344,39 @@ keypad(win, TRUE);
                     wrefresh(win);
                 }
             }
-
-            if(key == KEY_LEFT)
+            else if(key == KEY_LEFT)
             {
                 if(snode->parent != NULL)
                 {
                     snode = snode->parent;
-                    snode->collapsed = true;
-                    clear_tree(win,line_nr);
+                    snode->is_collapsed = true;
+                    clear_tree(win,clear_line,line_nr);
                     line_nr = 1;
                     print_tree(win,&nodes[0],1,&line_nr,snode);
                     wrefresh(win);
                 }
             }
-
             else if(key == KEY_RIGHT)
             {      
                 if(snode->child_count > 0)
                 {          
-                    snode->collapsed = false;
+                    snode->is_collapsed = false;
                     snode = snode->children[0];
-                    clear_tree(win,line_nr);
+                    clear_tree(win,clear_line,line_nr);
                     line_nr = 1;
                     print_tree(win,&nodes[0],1,&line_nr,snode);
                     wrefresh(win);
                 }
             }
+            else if(key == 10)
+            {
+                quit = true;
+            }
+            sleep(0.1);
         }
     }
+
+    free(clear_line);
     endwin();
     fclose(data);
     return(0);
