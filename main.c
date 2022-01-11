@@ -70,13 +70,15 @@ void clear_tree(WINDOW *win,char * clear_line, int lines)
     }
     
 }
+
 void print_tree(WINDOW *win,Node *node, int depth,int *line_nr, Node *selected_node)
 {    
-    char *output = node->console_output_line;
+    char *output = node->console_output_line;     
 
     if(!node->generated_console_output_line)
     {
         int length = 0;   
+        
         calc_length(node,&length); 
 
         genereate_line(output,length-1,node);
@@ -116,10 +118,15 @@ void print_tree(WINDOW *win,Node *node, int depth,int *line_nr, Node *selected_n
 
         memcpy(output+P,"]",1);   
 
+        output[P+1] = '\0';
+
         node->generated_console_output_line = true;
 
     }
 
+   
+    
+   
     if(node == selected_node)
     {
         wattron(win, COLOR_PAIR(1));
@@ -131,14 +138,17 @@ void print_tree(WINDOW *win,Node *node, int depth,int *line_nr, Node *selected_n
 
      mvwprintw(win,*line_nr,1,output);
 
-        
+    
      *line_nr +=1;
 
     if(!node->is_collapsed)
     {
-        for (int i = 0; i < node->child_count; i++)
+        if(node->child_count > 0)
         {
-            print_tree(win,node->children[i],depth+1,line_nr,selected_node);
+            for (int i = 0; i < node->child_count; i++)
+            {
+                print_tree(win,node->children[i],depth+1,line_nr,selected_node);
+            }
         }
     }
 }
@@ -155,7 +165,65 @@ void count_utf8_chars(const char *str,int *count)
         position ++;
     }
 }
+void parse_node_tree(int *path_endings,int path_index, const char *line, Node *nodes, int *node_count)
+{
+    for (size_t i = 0; i < path_index; i++)
+    {
+        Node *node = &nodes[*node_count];
+        
+        int temp_length = (path_endings[i+1]) - (path_endings[i]+1);
+        int length_name = temp_length >= BUFFER_LENGTH_NAME ? BUFFER_LENGTH_NAME-1 : temp_length;
+        int length_path = path_endings[i+1] >= BUFFER_LENGTH_PATH ? BUFFER_LENGTH_PATH-1 : path_endings[i+1];
 
+        if(length_name > 0)
+        {
+            memcpy(node->name,&line[(path_endings[i]+1)],sizeof(char)*length_name);
+            node->name[length_name] = '\0';
+            count_utf8_chars(node->name,&node->chars_in_name);
+        }
+        if(length_path > 0)
+        {
+            memcpy(node->path,&line[0],sizeof(char)*length_path);
+            node->path[length_path] = '\0';
+        }
+        else
+        {
+            memcpy(node->path,"/root",sizeof(char)*5);
+            node->path[5] = '\0';
+        }  
+        bool exists = false;
+        for (int j = (*node_count)-1; j >= 0; j--)
+        {
+            if(strcmp(nodes[j].path,node->path) == 0)
+            {
+                 exists = true;
+                 break;
+            }
+        }       
+        
+        if(!exists)
+        {
+            node->child_count = 0;
+            node->is_collapsed = true;
+            node->generated_console_output_line = false;
+
+            for (int j = (*node_count)-1; j >= 0; j--)
+            {
+                if(strncmp(nodes[j].path,node->path,strlen(nodes[j].path)) == 0)
+                {
+                    
+                    nodes[j].children[nodes[j].child_count] = node; 
+                    node->child_index = nodes[j].child_count;
+                    nodes[j].child_count++;
+                    node->parent = &nodes[j];
+                    break;
+                }                
+            }
+            *node_count += 1;
+        }
+    }
+    
+}
 int main () 
 {
     setlocale(LC_ALL, "sv_SE.UTF-8");  
@@ -196,193 +264,82 @@ int main ()
 
         Node nodes[max_nodes];
         strcpy(nodes[0].name,"root");
-        strcpy(nodes[0].path,"root");
+        strcpy(nodes[0].path,"/root");
         count_utf8_chars(nodes[0].name,&(nodes[0].chars_in_name));
         nodes[0].is_collapsed = false;
+        nodes[0].child_count = 0;
         nodes[0].generated_console_output_line = false;
-        int node_count = 1;
-
-        
+        nodes[0].parent = NULL;
+        int node_count = 1;        
 
         while ((read = getline(&line, &len, data)) != -1) 
         {
-
             int path_end = 0;
-            Node *endpoint_node = NULL;
 
-            bool address_parsed = false;
-            bool ip_parsed = false;
-            bool twid_parsed = false;
-            bool pwd_parsed = false;
+            bool address_parsed = false,ip_parsed = false,twid_parsed = false,pwd_parsed = false;  
+            int path_endings[6] = {0,0,0,0,0,0};
+            int parsing_stage = 0, path_index = 0;
 
-            int start = 0;
-            int end = 0;
-            //int path_end = 0;
             for (size_t i = 0; line[i]; i++)
             {
-                Node *node = &nodes[node_count];
+                if(line[i] == ';')
+                {
+                    Node *node = &nodes[node_count-1];
+                    int start,end,length = 0;
+                    switch (parsing_stage)
+                    {
+                        case 0:
+                            path_endings[path_index] = i;
+                            parse_node_tree(path_endings,path_index,line,nodes,&node_count);                            
+                            break;
+                        case 1:
+                            start = path_endings[path_index]+1;
+                            end = i;
+                            length = end - start;
+                            memcpy(node->ip,&line[start],length);
+                            node->ip[length] = '\0';
+                            break;
+                        case 2:
+                            start = end+1;
+                            end = i;
+                            length = end - start;
+                            memcpy(node->twid,&line[start],length);
+                            node->twid[length] = '\0';
+                            break;
+                        case 3:
+                            start = end+1;
+                            end = i;
+                            length = end - start;
+                            memcpy(node->pwd,&line[start],length);
+                            node->pwd[length] = '\0';
+                            break;                       
+                        default:
+                            break;
+                    }
 
-                if(!address_parsed)
-                {                    
+                    parsing_stage ++; 
+                }
+                else if(parsing_stage == 0)
+                {
                     if(line[i] == '/')
-                    {         
-                        //Previous Node Path
-                        int length_path = end + 1 >= BUFFER_LENGTH_PATH ? BUFFER_LENGTH_PATH-1 : end + 1;
-                        char prev[length_path];     
-                        memcpy(prev,&line[0],length_path);
-                        prev[length_path-1] = '\0';
-
-                        if(end == 0)
-                        {
-                            strcpy(prev,"root");
-                        }
-
-                        end = i;
-
-                        //Node Name
-                        int length_name = end-start + 1 >= BUFFER_LENGTH_NAME ? BUFFER_LENGTH_NAME-1 : end-start + 1;
-                        memcpy(node->name,&line[start],length_name);
-                        node->name[length_name-1] = '\0';
-                        count_utf8_chars(node->name,&node->chars_in_name);
-
-                        //Current Node Path
-                        length_path = end + 1 >= BUFFER_LENGTH_PATH ? BUFFER_LENGTH_PATH-1 : end + 1;
-                        memcpy(node->path,&line[0],length_path);
-                        node->path[length_path-1] = '\0';
-                        node->is_collapsed = true;
-                        node->generated_console_output_line = false;
-
-                        //Look if Node allready exists
-                        bool exists = false;
-                        for (int j = 0; j < node_count; j++)
-                        {
-                            if(strcmp(nodes[j].path,node->path) == 0)
-                            {
-                                exists = true;   
-                                break;
-                            }
-                        }    
-
-                        //Adds Node if no other with the same path exists
-                        if(!exists)
-                        {
-                            node->child_count = 0;
-
-                            for (unsigned int j = node_count; j != 0; j--)
-                            {                
-                                int index = j-1;
-                                if(strcmp(nodes[index].path,prev) == 0)
-                                {
-                                    nodes[index].children[nodes[index].child_count] = node; 
-                                    node->child_index = nodes[index].child_count;
-                                    nodes[index].child_count++;
-                                    node->parent = &nodes[index];
-                                    break;
-                                }
-                            } 
-
-                            node_count++;  
-                        }
-                        start = end+1;                    
-                    }    
-                    else if(line[i] == ';')
                     {
-                        path_end = start-1;
-                        end = i;
-
-                        endpoint_node = &nodes[node_count];
-
-                        if(end-start == 0)
-                        {
-                            memcpy(endpoint_node->name,"default",7);
-                        }
-                        else
-                        {
-                            //Node name (Endpoint)
-                            int length_name = end-start+1 >= BUFFER_LENGTH_NAME ? BUFFER_LENGTH_NAME-1 : end-start+1;
-                            memcpy(endpoint_node->name,&line[start],length_name);
-                            endpoint_node->name[length_name-1] = '\0';
-                            count_utf8_chars(endpoint_node->name,&endpoint_node->chars_in_name);
-                            endpoint_node->is_endpoint = true;  
-                            endpoint_node->is_collapsed = true;
-                            endpoint_node->generated_console_output_line = false;
-
-                            //Node path (Endpoint)
-                            int length_path = path_end+1 >= BUFFER_LENGTH_PATH ? BUFFER_LENGTH_PATH-1 : path_end+1;
-                            char path[length_path];
-                            memcpy(path,&line[0],length_path-1);     
-                            path[length_path-1] = '\0';
-
-                            for (unsigned int j = node_count; j != 0; j--)
-                            {     
-                                int index = j-1;           
-                                Node *local_node = &nodes[index];
-                                if(strcmp(local_node->path,path) == 0)
-                                {
-                                    if(!local_node->is_endpoint)
-                                    {
-                                        local_node->children[local_node->child_count] = endpoint_node;
-                                        endpoint_node->child_index = local_node->child_count;
-                                        local_node->child_count++;
-                                        endpoint_node->parent = local_node;
-                                        break;
-                                    }
-                                }
-                            }   
-                        }  
-
-                        node_count++;  
-                        address_parsed = true;
-
-                        start = end+1; 
+                        path_endings[path_index] = i;
+                        path_index ++;
                     }
                 }
-                else if(!ip_parsed)
-                {
-                    if(line[i] == ';')
-                    {
-                        end = i;
-                        int len = (end-start < 14) ? end-start:14;
-                        memcpy(endpoint_node->ip,&line[start],len);
-                        printf("%s",endpoint_node->name);
-                        printf("%s",endpoint_node->ip);
-                        ip_parsed = true;
-                        start = end+1;
-                    }
-                }
-                else if(!twid_parsed)
-                {
-                    if(line[i] == ';')
-                    {
-                        end = i;
-                        int len = (end-start < 9) ? end-start:9;
-                        memcpy(endpoint_node->twid,&line[start],len);
-                        twid_parsed = true;
-                        start = end+1;
-                    }
-                }
-                else if(pwd_parsed)
-                {
-                    if(line[i] == ';')
-                    {
-                        end = i;
-                        int len = (end-start < 15) ? end-start:15;
-                        memcpy(endpoint_node->pwd,&line[start],len);
-                        pwd_parsed = true;
-                        start = end+1;
-                    }
-                }
-            
-            }       
-
-                
+            }
         }
 
-       
+    
+        
 
+
+
+    
         int line_nr = 1;
         Node *snode = &nodes[0];
         print_tree(win,&nodes[0],1,&line_nr,snode);
+       
         wrefresh(win);
 
         bool quit = false;
@@ -449,7 +406,10 @@ int main ()
                 quit = true;
             }
             sleep(0.1);
-        }
+
+       }
+       
+
     }
 
     free(clear_line);
