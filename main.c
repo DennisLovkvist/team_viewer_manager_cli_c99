@@ -262,7 +262,8 @@ int main ()
         }
         rewind(data);
 
-        Node nodes[max_nodes];
+        Node *nodes = (Node*)malloc(sizeof(Node)*max_nodes);
+
         strcpy(nodes[0].name,"root");
         strcpy(nodes[0].path,"/root");
         count_utf8_chars(nodes[0].name,&(nodes[0].chars_in_name));
