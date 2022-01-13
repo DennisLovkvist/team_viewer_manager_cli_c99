@@ -167,7 +167,7 @@ void count_utf8_chars(const char *str,int *count)
 }
 void parse_node_tree(int *path_endings,int path_index, const char *line, Node *nodes, int *node_count)
 {
-    for (size_t i = 0; i < path_index; i++)
+    for (int i = 0; i < path_index; i++)
     {
         Node *node = &nodes[*node_count];
         
@@ -275,9 +275,6 @@ int main ()
 
         while ((read = getline(&line, &len, data)) != -1) 
         {
-            int path_end = 0;
-
-            bool address_parsed = false,ip_parsed = false,twid_parsed = false,pwd_parsed = false;  
             int path_endings[6] = {0,0,0,0,0,0};
             int parsing_stage = 0, path_index = 0;
 
