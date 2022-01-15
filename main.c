@@ -231,6 +231,51 @@ void parse_node_tree(int *path_endings,int path_index, const char *line, Node *n
     }
     
 }
+void print_header_bar(WINDOW *win,Node *node)
+{
+    wattroff(win, COLOR_PAIR(1));
+
+    box(win,0,0);
+    mvwprintw(win,0,64," IP:");
+
+    if(node->parent != NULL)
+    {
+        //Child index
+        int n = (node->parent->selected_child_index > 9) ? 2:1;
+        int m = (node->parent->child_count > 9) ? 2:1;
+
+        char str[3];
+
+        mvwprintw(win,0,32," Child: ");
+        sprintf(str, "%d", node->parent->selected_child_index);
+        mvwprintw(win,0,32+7,str);
+        mvwprintw(win,0,32+7+n,"/");
+        sprintf(str, "%d", node->parent->child_count);
+        mvwprintw(win,0,32+7+n+1,str);
+        mvwprintw(win,0,32+7+n+1+m," ");
+
+
+        //IP
+        if((strcmp(node->ip,"") == 0))
+        {
+            mvwprintw(win,0,64+4,"N/A ");
+        }
+        else
+        {
+            mvwprintw(win,0,64+4,node->ip);
+            mvwprintw(win,0,64+4+strlen(node->ip)," ");
+        }
+
+        
+    }
+    else
+    {
+        mvwprintw(win,0,64+3,"N/A ");
+    }          
+
+    mvwprintw(win,0,2," Team Viewer Manager CLI ");
+    mvwprintw(win,0,124," Press Q to exit ");
+}
 int main () 
 {
     setlocale(LC_ALL, "sv_SE.UTF-8");  
@@ -336,7 +381,7 @@ int main ()
             }
         }
     
-        int line_nr = 1;
+        int line_nr = 2;
         Node *snode = &nodes[0];
         print_tree(win,&nodes[0],1,&line_nr,snode);
        
@@ -356,18 +401,11 @@ int main ()
                     snode->parent->selected_child_index = snode->child_index;
 
                     clear_tree(win,clear_line,line_nr);
-                    line_nr = 1;
+                    line_nr = 2;
                     print_tree(win,&nodes[0],1,&line_nr,snode);
 
-                    mvwprintw(win,0,64,"────────────────");        
-                    char str[2];
-                    sprintf(str, "%d", snode->parent->selected_child_index);       
-                    mvwprintw(win,0,64,"child:");
-                    mvwprintw(win,0,64+6,str);
-                    int n = (snode->parent->selected_child_index > 9) ? 2:1;
-                    mvwprintw(win,0,64+6+n,"/");
-                    sprintf(str, "%d", snode->parent->child_count);  
-                    mvwprintw(win,0,64+6+n+1,str);
+                    print_header_bar(win,snode);
+                    
 
                     wrefresh(win);
                 }
@@ -381,9 +419,10 @@ int main ()
                     snode->parent->selected_child_index = snode->child_index;
                    
                     clear_tree(win,clear_line,line_nr);
-                    line_nr = 1;
+                    line_nr = 2;
                     print_tree(win,&nodes[0],1,&line_nr,snode);
 
+                    print_header_bar(win,snode);
 
                     wrefresh(win);
                 }
@@ -395,9 +434,10 @@ int main ()
                     snode = snode->parent;
                     snode->is_collapsed = true;
                     clear_tree(win,clear_line,line_nr);
-                    line_nr = 1;
+                    line_nr = 2;
                     print_tree(win,&nodes[0],1,&line_nr,snode);
 
+                    print_header_bar(win,snode);
 
                     wrefresh(win);
                 }
@@ -409,9 +449,10 @@ int main ()
                     snode->is_collapsed = false;
                     snode = snode->children[0];
                     clear_tree(win,clear_line,line_nr);
-                    line_nr = 1;
+                    line_nr = 2;
                     print_tree(win,&nodes[0],1,&line_nr,snode);
 
+                    print_header_bar(win,snode);
 
                     wrefresh(win);
                 }
