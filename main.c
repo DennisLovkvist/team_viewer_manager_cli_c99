@@ -60,7 +60,6 @@ void calc_length(Node *node,int *length)
 { 
     if(node->parent == NULL)return;
     //+3 for child count indicator example: [32]
-
     *length += (node->parent->chars_in_name) + 3;
     calc_length(node->parent,length);
 }
@@ -148,16 +147,6 @@ void print_tree(WINDOW *win,Node *node, int depth,int *line_nr, Node *selected_n
     {
         if(node->child_count > 0)
         {
-            /*
-            if(node->child_count < 10)
-            {
-                for (int i = 0; i < node->child_count; i++)
-                {
-                    print_tree(win,node->children[i],depth+1,line_nr,selected_node);
-                }
-            }*/
-
-
             int start = node->selected_child_index > 10 ? node->selected_child_index-10:0;
             int end = start + 12 < node->child_count ? start + 12 : node->child_count;
 
@@ -346,12 +335,6 @@ int main ()
                 }
             }
         }
-
-    
-        
-
-
-
     
         int line_nr = 1;
         Node *snode = &nodes[0];
@@ -368,8 +351,7 @@ int main ()
             if(key == KEY_DOWN)
             {
                 if(snode->parent != NULL)
-                {
-                    
+                {                    
                     snode = (snode->child_index +1 >= snode->parent->child_count) ? snode->parent->children[0] : snode->parent->children[snode->child_index+1];
                     snode->parent->selected_child_index = snode->child_index;
 
@@ -377,10 +359,16 @@ int main ()
                     line_nr = 1;
                     print_tree(win,&nodes[0],1,&line_nr,snode);
 
+                    mvwprintw(win,0,64,"────────────────");        
                     char str[2];
-        sprintf(str, "%d", snode->parent->selected_child_index);
+                    sprintf(str, "%d", snode->parent->selected_child_index);       
+                    mvwprintw(win,0,64,"child:");
+                    mvwprintw(win,0,64+6,str);
+                    int n = (snode->parent->selected_child_index > 9) ? 2:1;
+                    mvwprintw(win,0,64+6+n,"/");
+                    sprintf(str, "%d", snode->parent->child_count);  
+                    mvwprintw(win,0,64+6+n+1,str);
 
-                    mvwprintw(win,0,0,str);
                     wrefresh(win);
                 }
             }
@@ -437,10 +425,11 @@ int main ()
        }
        
 
+        free(nodes);
     }
 
     free(clear_line);
-    //endwin();
+    endwin();
     fclose(data);
     return(0);
 }
