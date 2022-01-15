@@ -59,7 +59,8 @@ void genereate_line(char *str,int position, Node *node)
 void calc_length(Node *node,int *length)
 { 
     if(node->parent == NULL)return;
-    //+3 for child count indicator example: [3]
+    //+3 for child count indicator example: [32]
+
     *length += (node->parent->chars_in_name) + 3;
     calc_length(node->parent,length);
 }
@@ -112,10 +113,11 @@ void print_tree(WINDOW *win,Node *node, int depth,int *line_nr, Node *selected_n
         memcpy(output+P,"[",1);
         P+=1;
 
-        char str[2];
+        char str[3];
         sprintf(str, "%d", node->child_count);
-        memcpy(output+P,str,1); 
-        P += 1;
+        memcpy(output+P,str,2); 
+        
+        P += (node->child_count >= 10) ? 2:1;
 
         memcpy(output+P,"]",1);   
 
