@@ -27,6 +27,7 @@ typedef struct Node
     bool is_endpoint;
     bool is_collapsed;
     bool generated_console_output_line;
+    int selected_child_index;
 }
 Node;
 
@@ -145,10 +146,24 @@ void print_tree(WINDOW *win,Node *node, int depth,int *line_nr, Node *selected_n
     {
         if(node->child_count > 0)
         {
-            for (int i = 0; i < node->child_count; i++)
+            /*
+            if(node->child_count < 10)
+            {
+                for (int i = 0; i < node->child_count; i++)
+                {
+                    print_tree(win,node->children[i],depth+1,line_nr,selected_node);
+                }
+            }*/
+
+
+            int start = node->selected_child_index > 10 ? node->selected_child_index-10:0;
+            int end = start + 12 < node->child_count ? start + 12 : node->child_count;
+
+            for (int i = start; i <end; i++)
             {
                 print_tree(win,node->children[i],depth+1,line_nr,selected_node);
             }
+            
         }
     }
 }
@@ -206,6 +221,7 @@ void parse_node_tree(int *path_endings,int path_index, const char *line, Node *n
             node->child_count = 0;
             node->is_collapsed = true;
             node->generated_console_output_line = false;
+            node->selected_child_index = 0;
 
             for (int j = (*node_count)-1; j >= 0; j--)
             {
@@ -271,6 +287,7 @@ int main ()
         nodes[0].child_count = 0;
         nodes[0].generated_console_output_line = false;
         nodes[0].parent = NULL;
+        nodes[0].selected_child_index = 0;
         int node_count = 1;        
 
         while ((read = getline(&line, &len, data)) != -1) 
@@ -350,12 +367,18 @@ int main ()
             {
                 if(snode->parent != NULL)
                 {
-                    line_nr = 1;
+                    
                     snode = (snode->child_index +1 >= snode->parent->child_count) ? snode->parent->children[0] : snode->parent->children[snode->child_index+1];
+                    snode->parent->selected_child_index = snode->child_index;
+
+                    clear_tree(win,clear_line,line_nr);
+                    line_nr = 1;
                     print_tree(win,&nodes[0],1,&line_nr,snode);
 
+                    char str[2];
+        sprintf(str, "%d", snode->parent->selected_child_index);
 
-                    mvwprintw(win,0,0,snode->ip);
+                    mvwprintw(win,0,0,str);
                     wrefresh(win);
                 }
             }
@@ -363,8 +386,12 @@ int main ()
             {
                 if(snode->parent != NULL)
                 {
-                    line_nr = 1;
+                    
                     snode = (snode->child_index -1 < 0) ? snode->parent->children[snode->parent->child_count-1] : snode->parent->children[snode->child_index-1];
+                    snode->parent->selected_child_index = snode->child_index;
+                   
+                    clear_tree(win,clear_line,line_nr);
+                    line_nr = 1;
                     print_tree(win,&nodes[0],1,&line_nr,snode);
 
 
