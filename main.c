@@ -13,7 +13,9 @@
 #define BACKSPACE_KEY 127
 #define ENTER_KEY 10
 
-typedef struct Node
+typedef struct Node Node;
+
+struct Node
 {    
     char console_output_line[BUFFER_LENGTH_PATH];
     char path[BUFFER_LENGTH_PATH];
@@ -31,8 +33,7 @@ typedef struct Node
     bool is_collapsed;
     bool generated_console_output_line;
     int selected_child_index;
-}
-Node;
+};
 
 void genereate_line(char *str,int position, Node *node)
 {
@@ -52,6 +53,7 @@ void genereate_line(char *str,int position, Node *node)
         str[position--] = ' ';
     } 
     str[position--] = (node->parent->child_index == node->parent->parent->child_count-1) ? ' ' :'|';  
+
 
     if(position > 0)
     {
@@ -297,7 +299,7 @@ void expand_current_lineage(Node *node)
 }
 bool find_endpoint(Node **node,Node *endpoints, const int endpoint_count, const char *cmd_buffer)
 {
-    for (size_t i = 0; i < endpoint_count; i++)
+    for (int i = 0; i < endpoint_count; i++)
     {
         if(strcmp(endpoints[i].key,cmd_buffer) == 0)
         {
