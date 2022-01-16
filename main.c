@@ -46,8 +46,8 @@ void genereate_line(char *str,int position, Node *node)
         } 
         return;
     }
-    //+3 for child count indicator example: [3]
-    size_t length = (node->parent->chars_in_name)-1 + 3;
+    //Parent name length + 3 or 4 to compensate count indicator. Example [5] or [18]
+    size_t length = (node->parent->chars_in_name) -1 +((node->parent->child_count > 9) ? 4:3);
     for (size_t i = 0; i < length; i++)
     {
         str[position--] = ' ';
@@ -65,7 +65,7 @@ void calc_length(Node *node,int *length)
 { 
     if(node->parent == NULL)return;
     //+3 for child count indicator example: [32]
-    *length += (node->parent->chars_in_name) + 3;
+    *length += (node->parent->chars_in_name) + ((node->parent->child_count > 9) ? 4:3);
     calc_length(node->parent,length);
 }
 void clear_tree(WINDOW *win,char * clear_line, int lines)
