@@ -21,6 +21,7 @@ typedef struct Node
     char ip[15];
     char twid[15];
     char pwd[16];
+    char key[16];
     Node* parent;
     Node* children[64];    
     int child_count;
@@ -86,50 +87,47 @@ void print_tree(WINDOW *win,Node *node, int depth,int *line_nr, Node *selected_n
 
         genereate_line(output,length-1,node);
 
-        int P = length;
+        int position = length;
         int namen_length = strlen(node->name);
 
         if(node->parent == NULL)
         {
-            memcpy(output+P,"└─",6);
-            P += 6;
+            memcpy(output+position,"└─",6);
+            position += 6;
         }
         else
         {
             if(node->child_index == node->parent->child_count-1)
             {         
-                memcpy(output+P,"└─",6);
-                P += 6;   
+                memcpy(output+position,"└─",6);
+                position += 6;   
             }
             else
             {     
-                memcpy(output+P,"├─",6);
-                P += 6;     
+                memcpy(output+position,"├─",6);
+                position += 6;     
             }
         }
 
-        memcpy(output+P,node->name,namen_length);
-        P += namen_length;
+        memcpy(output+position,node->name,namen_length);
+        position += namen_length;
 
-        memcpy(output+P,"[",1);
-        P+=1;
+        memcpy(output+position,"[",1);
+        position+=1;
 
         char str[3];
         sprintf(str, "%d", node->child_count);
-        memcpy(output+P,str,2); 
+        memcpy(output+position,str,2); 
         
-        P += (node->child_count >= 10) ? 2:1;
+        position += (node->child_count >= 10) ? 2:1;
 
-        memcpy(output+P,"]",1);   
+        memcpy(output+position,"]",1);   
 
-        output[P+1] = '\0';
+        output[position+1] = '\0';
 
         node->generated_console_output_line = true;
 
-    }
-
-   
-    
+    }  
    
     if(node == selected_node)
     {
@@ -277,7 +275,38 @@ void print_header_bar(WINDOW *win,Node *node)
     }          
 
     mvwprintw(win,0,2," Team Viewer Manager CLI ");
-    mvwprintw(win,0,124," Press Q to exit ");
+}
+void collapse_current_lineage(Node *node)
+{
+    node->is_collapsed = true;
+
+    if(node->parent != NULL)
+    {        
+        collapse_current_lineage(node->parent);
+    }
+}
+void expand_current_lineage(Node *node)
+{
+    node->is_collapsed = false;
+
+    if(node->parent != NULL)
+    {        
+    node->parent->selected_child_index = node->child_index;
+        expand_current_lineage(node->parent);
+    }
+}
+bool find_endpoint(Node **node,Node *endpoints, const int endpoint_count, const char *cmd_buffer)
+{
+    for (size_t i = 0; i < endpoint_count; i++)
+    {
+        if(strcmp(endpoints[i].key,cmd_buffer) == 0)
+        {
+            *node = &endpoints[i];
+            return true;
+        }
+    }
+    return false;
+    
 }
 int main () 
 {
@@ -305,7 +334,7 @@ int main ()
         char * line = NULL;
         size_t len = 0;
         ssize_t read;
-        int max_nodes = 0;  
+        int max_nodes = 0,max_endpoints = 0;  
         int c; 
          for (c = getc(data); c != EOF; c = getc(data))
          {
@@ -313,11 +342,17 @@ int main ()
             {
                 max_nodes ++;
             }
+            else if(c == '\n')
+            {
+                max_endpoints ++;
+            }
 
         }
         rewind(data);
 
         Node *nodes = (Node*)malloc(sizeof(Node)*max_nodes);
+
+        Node *endpoints[max_endpoints];
 
         strcpy(nodes[0].name,"root");
         strcpy(nodes[0].path,"/root");
@@ -327,7 +362,8 @@ int main ()
         nodes[0].generated_console_output_line = false;
         nodes[0].parent = NULL;
         nodes[0].selected_child_index = 0;
-        int node_count = 1;        
+        int node_count = 1;  
+        int endpoint_count = 0;        
 
         while ((read = getline(&line, &len, data)) != -1) 
         {
@@ -352,20 +388,25 @@ int main ()
                             length = end - start;
                             memcpy(node->ip,&line[start],length);
                             node->ip[length] = '\0';
+
+
+                            endpoints[endpoint_count] = node;
+                            endpoint_count += 1;
+
                             break;
                         case 2:
                             start = end+1;
                             end = i;
                             length = end - start;
-                            memcpy(node->twid,&line[start],length);
-                            node->twid[length] = '\0';
-                            break;
+                            memcpy(node->pwd,&line[start],length);
+                            node->pwd[length] = '\0';
+                            break;   
                         case 3:
                             start = end+1;
                             end = i;
                             length = end - start;
-                            memcpy(node->pwd,&line[start],length);
-                            node->pwd[length] = '\0';
+                            memcpy(node->key,&line[start],length);
+                            node->key[length] = '\0';
                             break;                       
                         default:
                             break;
@@ -388,6 +429,7 @@ int main ()
         Node *snode = &nodes[0];
 
         line_nr = 2;
+
         print_tree(win,&nodes[0],1,&line_nr,snode);
         print_header_bar(win,snode);      
         wrefresh(win);
@@ -485,13 +527,21 @@ int main ()
                 {
                     mode = 0;
                     mvwprintw(win,max_y-2,2,"                                                                                ");
-                    cmd_buffer[0] = '\0';
-                    cmd_pos = 0;
+                    
                     clear_tree(win,clear_line,line_nr);
                     line_nr = 2;
+                    collapse_current_lineage(snode);                     
+
+                    if(find_endpoint(&snode,*endpoints, endpoint_count,cmd_buffer))
+                    {                        
+                        expand_current_lineage(snode);                        
+                    }
                     print_tree(win,&nodes[0],1,&line_nr,snode);
                     print_header_bar(win,snode);  
                     wrefresh(win);
+
+                    cmd_buffer[0] = '\0';
+                    cmd_pos = 0;
                 }
                 else
                 {
