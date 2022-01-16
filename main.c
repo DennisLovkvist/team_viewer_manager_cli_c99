@@ -10,6 +10,8 @@
 #define MAX_DEPTH 6
 #define BUFFER_LENGTH_PATH 144
 #define BUFFER_LENGTH_NAME 24
+#define BACKSPACE_KEY 127
+#define ENTER_KEY 10
 
 typedef struct Node
 {    
@@ -241,13 +243,13 @@ void print_header_bar(WINDOW *win,Node *node)
     if(node->parent != NULL)
     {
         //Child index
-        int n = (node->parent->selected_child_index > 9) ? 2:1;
+        int n = (node->parent->selected_child_index+1 > 9) ? 2:1;
         int m = (node->parent->child_count > 9) ? 2:1;
 
         char str[3];
 
         mvwprintw(win,0,32," Child: ");
-        sprintf(str, "%d", node->parent->selected_child_index);
+        sprintf(str, "%d", node->parent->selected_child_index+1);
         mvwprintw(win,0,32+7,str);
         mvwprintw(win,0,32+7+n,"/");
         sprintf(str, "%d", node->parent->child_count);
@@ -270,7 +272,8 @@ void print_header_bar(WINDOW *win,Node *node)
     }
     else
     {
-        mvwprintw(win,0,64+3,"N/A ");
+        mvwprintw(win,0,32," Child: 1/1 ");
+        mvwprintw(win,0,64+4,"N/A ");
     }          
 
     mvwprintw(win,0,2," Team Viewer Manager CLI ");
@@ -383,84 +386,146 @@ int main ()
     
         int line_nr = 2;
         Node *snode = &nodes[0];
+
+        line_nr = 2;
         print_tree(win,&nodes[0],1,&line_nr,snode);
-       
+        print_header_bar(win,snode);      
         wrefresh(win);
 
         bool quit = false;
+        int mode = 0;
+        char cmd_buffer[64];
+        int cmd_pos = 0;
 
         while(!quit)
         {
             int key = wgetch(win);
 
-            if(key == KEY_DOWN)
+            if(mode == 0)
             {
-                if(snode->parent != NULL)
-                {                    
-                    snode = (snode->child_index +1 >= snode->parent->child_count) ? snode->parent->children[0] : snode->parent->children[snode->child_index+1];
-                    snode->parent->selected_child_index = snode->child_index;
+                if(key == KEY_DOWN)
+                {
+                    if(snode->parent != NULL)
+                    {                    
+                        snode = (snode->child_index +1 >= snode->parent->child_count) ? snode->parent->children[0] : snode->parent->children[snode->child_index+1];
+                        snode->parent->selected_child_index = snode->child_index;
 
+                        clear_tree(win,clear_line,line_nr);
+                        line_nr = 2;
+                        print_tree(win,&nodes[0],1,&line_nr,snode);
+
+                        print_header_bar(win,snode);
+                        
+
+                        wrefresh(win);
+                    }
+                }
+                else if(key == KEY_UP)
+                {
+                    if(snode->parent != NULL)
+                    {
+                        
+                        snode = (snode->child_index -1 < 0) ? snode->parent->children[snode->parent->child_count-1] : snode->parent->children[snode->child_index-1];
+                        snode->parent->selected_child_index = snode->child_index;
+                    
+                        clear_tree(win,clear_line,line_nr);
+                        line_nr = 2;
+                        print_tree(win,&nodes[0],1,&line_nr,snode);
+
+                        print_header_bar(win,snode);
+
+                        wrefresh(win);
+                    }
+                }
+                else if(key == KEY_LEFT)
+                {
+                    if(snode->parent != NULL)
+                    {
+                        snode = snode->parent;
+                        snode->is_collapsed = true;
+                        clear_tree(win,clear_line,line_nr);
+                        line_nr = 2;
+                        print_tree(win,&nodes[0],1,&line_nr,snode);
+
+                        print_header_bar(win,snode);
+
+                        wrefresh(win);
+                    }
+                }
+                else if(key == KEY_RIGHT)
+                {      
+                    if(snode->child_count > 0)
+                    {          
+                        snode->is_collapsed = false;
+                        snode = snode->children[0];
+                        clear_tree(win,clear_line,line_nr);
+                        line_nr = 2;
+                        print_tree(win,&nodes[0],1,&line_nr,snode);
+
+                        print_header_bar(win,snode);
+
+                        wrefresh(win);
+                    }
+                }
+                else if(key == 113)
+                {
+                    //quit = true;
+                }
+                if(key == 99)
+                {
+                    mode = 1;
+                    mvwprintw(win,max_y-2,2,"cmd: ");
+                    wrefresh(win);
+                }
+            }
+            else
+            {
+
+                if(key == ENTER_KEY)
+                {
+                    mode = 0;
+                    mvwprintw(win,max_y-2,2,"                                                                                ");
+                    cmd_buffer[0] = '\0';
+                    cmd_pos = 0;
                     clear_tree(win,clear_line,line_nr);
                     line_nr = 2;
                     print_tree(win,&nodes[0],1,&line_nr,snode);
+                    print_header_bar(win,snode);  
+                    wrefresh(win);
+                }
+                else
+                {
+                    if(key == BACKSPACE_KEY)
+                    {
+                        cmd_buffer[cmd_pos] = '\0';
+                        cmd_pos --;
+                        cmd_buffer[cmd_pos] = ' ';
+                        if(cmd_pos < 0)cmd_pos = 0; 
+                        
+                    }
+                    else
+                    {
+                        if(cmd_pos < 63)
+                        {
+                            cmd_buffer[cmd_pos] = key;
+                            cmd_pos++;                             
+                            cmd_buffer[cmd_pos] = '\0';     
+                        }
+                    }
+                    mvwprintw(win,max_y-2,2,"cmd: ");
+                    mvwprintw(win,max_y-2,7,cmd_buffer);
+                    wrefresh(win);
+                }
 
-                    print_header_bar(win,snode);
+                    
                     
 
-                    wrefresh(win);
-                }
             }
-            else if(key == KEY_UP)
-            {
-                if(snode->parent != NULL)
-                {
-                    
-                    snode = (snode->child_index -1 < 0) ? snode->parent->children[snode->parent->child_count-1] : snode->parent->children[snode->child_index-1];
-                    snode->parent->selected_child_index = snode->child_index;
-                   
-                    clear_tree(win,clear_line,line_nr);
-                    line_nr = 2;
-                    print_tree(win,&nodes[0],1,&line_nr,snode);
+/*
+            char str[3];
 
-                    print_header_bar(win,snode);
-
-                    wrefresh(win);
-                }
-            }
-            else if(key == KEY_LEFT)
-            {
-                if(snode->parent != NULL)
-                {
-                    snode = snode->parent;
-                    snode->is_collapsed = true;
-                    clear_tree(win,clear_line,line_nr);
-                    line_nr = 2;
-                    print_tree(win,&nodes[0],1,&line_nr,snode);
-
-                    print_header_bar(win,snode);
-
-                    wrefresh(win);
-                }
-            }
-            else if(key == KEY_RIGHT)
-            {      
-                if(snode->child_count > 0)
-                {          
-                    snode->is_collapsed = false;
-                    snode = snode->children[0];
-                    clear_tree(win,clear_line,line_nr);
-                    line_nr = 2;
-                    print_tree(win,&nodes[0],1,&line_nr,snode);
-
-                    print_header_bar(win,snode);
-
-                    wrefresh(win);
-                }
-            }
-            else if(key == 10)
-            {
-                quit = true;
-            }
+        sprintf(str, "%d", key);
+            mvwprintw(win,0,70,str);*/
             sleep(0.1);
 
        }
