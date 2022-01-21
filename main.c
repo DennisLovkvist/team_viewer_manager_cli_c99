@@ -329,7 +329,7 @@ int main ()
     char *clear_line = (char*)malloc(sizeof(char)*BUFFER_LENGTH_PATH);
     memset(clear_line,' ',BUFFER_LENGTH_PATH-1);
 
-    FILE *data = fopen("src.txt", "r");
+    FILE *data = fopen("sample.txt", "r");
 
     if (data != NULL)
     {
